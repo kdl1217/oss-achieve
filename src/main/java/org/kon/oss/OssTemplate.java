@@ -2,6 +2,7 @@ package org.kon.oss;
 
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSClientBuilder;
+import com.aliyun.oss.internal.OSSHeaders;
 import com.aliyun.oss.model.*;
 import lombok.extern.slf4j.Slf4j;
 import org.kon.oss.listener.DownObjectProgressListener;
@@ -228,6 +229,8 @@ public class OssTemplate {
                 if (isListener) {
                     putObjectRequest.withProgressListener(new PushObjectProgressListener());
                 }
+                // 设置公共读
+                putObjectRequest.setMetadata(publicReadMetadata());
                 // 创建PutObject请求。
                 getOssClient().putObject(putObjectRequest);
             } else {
@@ -263,6 +266,8 @@ public class OssTemplate {
                 if (isListener) {
                     putObjectRequest.withProgressListener(new PushObjectProgressListener());
                 }
+                // 设置公共读
+                putObjectRequest.setMetadata(publicReadMetadata());
                 // 创建PutObject请求。
                 getOssClient().putObject(putObjectRequest);
             } else {
@@ -297,6 +302,8 @@ public class OssTemplate {
                 if (isListener) {
                     putObjectRequest.withProgressListener(new PushObjectProgressListener());
                 }
+                // 设置公共读
+                putObjectRequest.setMetadata(publicReadMetadata());
                 // 创建PutObject请求。
                 getOssClient().putObject(putObjectRequest);
             } else {
@@ -395,6 +402,18 @@ public class OssTemplate {
         } catch (Exception e) {
             log.error("down object stream error", e);
         }
+    }
+
+    /**
+     * 获取公共读meta
+     * @return ObjectMetadata
+     */
+    public ObjectMetadata publicReadMetadata() {
+        // 如果需要上传时设置存储类型和访问权限，请参考以下示例代码。
+        ObjectMetadata metadata = new ObjectMetadata();
+        metadata.setHeader(OSSHeaders.OSS_STORAGE_CLASS, StorageClass.Standard.toString());
+        metadata.setObjectAcl(CannedAccessControlList.PublicRead);
+        return metadata;
     }
 
 
