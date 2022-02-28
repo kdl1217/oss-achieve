@@ -25,6 +25,7 @@ public class OssConfiguration {
 
     @Bean
     public OssTemplate getOssTemplate() {
-        return new OssTemplate(this.endpoint, this.accessKeyId, this.accessKeySecret).build();
+        return new OssTemplate(this.endpoint, this.accessKeyId, this.accessKeySecret)
+                .build();
     }
 }

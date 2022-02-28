@@ -1,0 +1,6 @@
+project.version('0.1-SNAPSHOT')
+
+dependencies {
+    implementation 'com.aliyun.oss:aliyun-sdk-oss'
+    implementation 'org.springframework:spring-context'
+}

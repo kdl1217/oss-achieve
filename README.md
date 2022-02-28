@@ -12,6 +12,28 @@
 > 通过注入OssTemplate到Spring进行管理。即可使用ossTemplate对oss进行一系列操作。
 
 ---
+## 二、使用说明
+
+- 添加yaml配置
+````yaml
+# Oss settings
+oss:
+  endpoint: https://oss-cn-hangzhou.aliyuncs.com
+  accessKeyId: WJ0125KNWTSW
+  accessKeySecret: 92eb026ba2c3215f36e902
+````
+- 在SpringBoot启动类上添加注解
+```java
+@EnableOssClient
+@SpringBootApplication
+public class App {
+    public static void main(String[] args) {
+        SpringApplication.run(App.class, args);
+    }
+}
+```
+
+---
 ### 服务包括内容
 - 检测桶
 - 新建桶
