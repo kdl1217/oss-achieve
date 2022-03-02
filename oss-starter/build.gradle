@@ -1,4 +1,4 @@
-project.version('0.1-SNAPSHOT')
+project.version('0.2-SNAPSHOT')
 
 dependencies {
     implementation 'com.aliyun.oss:aliyun-sdk-oss'

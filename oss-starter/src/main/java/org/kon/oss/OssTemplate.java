@@ -13,17 +13,30 @@ import org.springframework.util.StringUtils;
 import java.io.*;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 /**
  * 阿里云Oss模板
+ *
+ *      文件默认都是私有的，上传返回的URL地址都是有时效性的。
+ *      上传默认是没有检测文件是否存在的，存在的文件会进行覆盖。可自行判断
+ *
+ *      官方定义：签名URL的默认过期时间为3600秒，最大值为32400秒 （8小时）。
  *
  * @author kon, created on 2022/2/25T13:54.
  * @version 1.0.0-SNAPSHOT
  */
 @Slf4j
 public class OssTemplate {
-
+    /**
+     * 默认过期时间
+     */
+    private static final long DEFAULT_EXPIRATION_TIME = 3600;
+    /**
+     * 过期时间（秒）
+     */
+    private long expirationSecond = DEFAULT_EXPIRATION_TIME;
     /**
      * yourEndpoint填写Bucket所在地域对应的Endpoint。以华东1（杭州）为例，Endpoint填写为https://oss-cn-hangzhou.aliyuncs.com
      */
@@ -46,6 +59,11 @@ public class OssTemplate {
         this.endpoint = endpoint;
         this.accessKeyId = accessKeyId;
         this.accessKeySecret = accessKeySecret;
+    }
+
+    public OssTemplate setExpirationSecond(long expirationSecond) {
+        this.expirationSecond = expirationSecond;
+        return this;
     }
 
     public OssTemplate build() {
@@ -186,10 +204,11 @@ public class OssTemplate {
      * @param bucketName    桶名称
      * @param objectName    Object完整路径，例如exampledir/exampleobject.txt。Object完整路径中不能包含Bucket名称。
      * @param content       byte数组
+     * @return URL地址
      */
-    public void pushStr(@NonNull String bucketName, @NonNull String objectName, @NonNull String content) {
+    public String pushStr(@NonNull String bucketName, @NonNull String objectName, @NonNull String content) {
         // 创建PutObject请求。
-        pushStr(bucketName, objectName, content, false);
+        return pushStr(bucketName, objectName, content, false);
     }
 
     /**
@@ -198,10 +217,11 @@ public class OssTemplate {
      * @param objectName    Object完整路径，例如exampledir/exampleobject.txt。Object完整路径中不能包含Bucket名称。
      * @param content       byte数组
      * @param isListener    是否监听
+     * @return URL地址
      */
-    public void pushStr(@NonNull String bucketName, @NonNull String objectName, @NonNull String content, boolean isListener) {
+    public String pushStr(@NonNull String bucketName, @NonNull String objectName, @NonNull String content, boolean isListener) {
         // 创建PutObject请求。
-        pushBytes(bucketName, objectName, content.getBytes(), isListener);
+        return pushBytes(bucketName, objectName, content.getBytes(), isListener);
     }
 
     /**
@@ -209,10 +229,11 @@ public class OssTemplate {
      * @param bucketName    桶名称
      * @param objectName    Object完整路径，例如exampledir/exampleobject.txt。Object完整路径中不能包含Bucket名称。
      * @param content       byte数组
+     * @return URL地址
      */
-    public void pushBytes(@NonNull String bucketName, @NonNull String objectName, @NonNull byte[] content) {
+    public String pushBytes(@NonNull String bucketName, @NonNull String objectName, @NonNull byte[] content) {
         // 创建PutObject请求。
-        pushBytes(bucketName, objectName, content, false);
+        return pushBytes(bucketName, objectName, content, false);
     }
 
     /**
@@ -221,24 +242,24 @@ public class OssTemplate {
      * @param objectName    Object完整路径，例如exampledir/exampleobject.txt。Object完整路径中不能包含Bucket名称。
      * @param content       byte数组
      * @param isListener    是否监听
+     * @return URL地址
      */
-    public void pushBytes(@NonNull String bucketName, @NonNull String objectName, @NonNull byte[] content, boolean isListener) {
+    public String pushBytes(@NonNull String bucketName, @NonNull String objectName, @NonNull byte[] content, boolean isListener) {
         try {
-            if (!isObjectExist(bucketName, objectName)) {
-                PutObjectRequest putObjectRequest = new PutObjectRequest(bucketName, objectName, new ByteArrayInputStream(content));
-                if (isListener) {
-                    putObjectRequest.withProgressListener(new PushObjectProgressListener());
-                }
-                // 设置公共读
-                putObjectRequest.setMetadata(publicReadMetadata());
-                // 创建PutObject请求。
-                getOssClient().putObject(putObjectRequest);
-            } else {
-                log.warn("objectName [{}-{}] is exist!!", bucketName, objectName);
+            PutObjectRequest putObjectRequest = new PutObjectRequest(bucketName, objectName, new ByteArrayInputStream(content));
+            if (isListener) {
+                putObjectRequest.withProgressListener(new PushObjectProgressListener());
             }
+            // 设置公共读
+            putObjectRequest.setMetadata(privateMetadata());
+            // 创建PutObject请求。
+            getOssClient().putObject(putObjectRequest);
+            // 生成URL地址
+            return generateUrl(bucketName, objectName, false);
         } catch (Exception e) {
             log.error("push bytes error");
         }
+        return null;
     }
 
     /**
@@ -246,9 +267,10 @@ public class OssTemplate {
      * @param bucketName    桶名称
      * @param objectName    Object完整路径，例如exampledir/exampleobject.txt。Object完整路径中不能包含Bucket名称。
      * @param url           网络流地址，eg: https://www.aliyun.com/
+     * @return URL地址
      */
-    public void pushUrl(@NonNull String bucketName, @NonNull String objectName, @NonNull String url) {
-        pushUrl(bucketName, objectName, url, false);
+    public String pushUrl(@NonNull String bucketName, @NonNull String objectName, @NonNull String url) {
+        return pushUrl(bucketName, objectName, url, false);
     }
 
     /**
@@ -257,25 +279,25 @@ public class OssTemplate {
      * @param objectName    Object完整路径，例如exampledir/exampleobject.txt。Object完整路径中不能包含Bucket名称。
      * @param url           网络流地址，eg: https://www.aliyun.com/
      * @param isListener    是否监听
+     * @return URL地址
      */
-    public void pushUrl(@NonNull String bucketName, @NonNull String objectName, @NonNull String url, boolean isListener) {
+    public String pushUrl(@NonNull String bucketName, @NonNull String objectName, @NonNull String url, boolean isListener) {
         try {
-            if (!isObjectExist(bucketName, objectName)) {
-                InputStream inputStream = new URL(url).openStream();
-                PutObjectRequest putObjectRequest = new PutObjectRequest(bucketName, objectName, inputStream);
-                if (isListener) {
-                    putObjectRequest.withProgressListener(new PushObjectProgressListener());
-                }
-                // 设置公共读
-                putObjectRequest.setMetadata(publicReadMetadata());
-                // 创建PutObject请求。
-                getOssClient().putObject(putObjectRequest);
-            } else {
-                log.warn("objectName [{}-{}] is exist!!", bucketName, objectName);
+            InputStream inputStream = new URL(url).openStream();
+            PutObjectRequest putObjectRequest = new PutObjectRequest(bucketName, objectName, inputStream);
+            if (isListener) {
+                putObjectRequest.withProgressListener(new PushObjectProgressListener());
             }
+            // 设置公共读
+            putObjectRequest.setMetadata(privateMetadata());
+            // 创建PutObject请求。
+            getOssClient().putObject(putObjectRequest);
+            // 生成URL地址
+            return generateUrl(bucketName, objectName, false);
         } catch (Exception e) {
             log.error("push url error", e);
         }
+        return null;
     }
 
     /**
@@ -283,9 +305,10 @@ public class OssTemplate {
      * @param bucketName    桶名称
      * @param objectName    Object完整路径，例如exampledir/exampleobject.txt。Object完整路径中不能包含Bucket名称。
      * @param filePath      文件路径，eg: D:\\localpath\\examplefile.txt
+     * @return URL地址
      */
-    public void pushFile(@NonNull String bucketName, @NonNull String objectName, @NonNull String filePath) {
-        pushFile(bucketName, objectName, filePath, false);
+    public String pushFile(@NonNull String bucketName, @NonNull String objectName, @NonNull String filePath) {
+        return pushFile(bucketName, objectName, filePath, false);
     }
 
     /**
@@ -294,24 +317,24 @@ public class OssTemplate {
      * @param objectName    Object完整路径，例如exampledir/exampleobject.txt。Object完整路径中不能包含Bucket名称。
      * @param filePath      文件路径，eg: D:\\localpath\\examplefile.txt
      * @param isListener    是否监听
+     * @return URL地址
      */
-    public void pushFile(@NonNull String bucketName, @NonNull String objectName, @NonNull String filePath, boolean isListener) {
+    public String pushFile(@NonNull String bucketName, @NonNull String objectName, @NonNull String filePath, boolean isListener) {
         try {
-            if (!isObjectExist(bucketName, objectName)) {
-                PutObjectRequest putObjectRequest = new PutObjectRequest(bucketName, objectName, new FileInputStream(filePath));
-                if (isListener) {
-                    putObjectRequest.withProgressListener(new PushObjectProgressListener());
-                }
-                // 设置公共读
-                putObjectRequest.setMetadata(publicReadMetadata());
-                // 创建PutObject请求。
-                getOssClient().putObject(putObjectRequest);
-            } else {
-                log.warn("objectName [{}-{}] is exist!!", bucketName, objectName);
+            PutObjectRequest putObjectRequest = new PutObjectRequest(bucketName, objectName, new FileInputStream(filePath));
+            if (isListener) {
+                putObjectRequest.withProgressListener(new PushObjectProgressListener());
             }
+            // 设置公共读
+            putObjectRequest.setMetadata(privateMetadata());
+            // 创建PutObject请求。
+            getOssClient().putObject(putObjectRequest);
+            // 生成URL地址
+            return generateUrl(bucketName, objectName, false);
         } catch (Exception e) {
             log.error("push file error", e);
         }
+        return null;
     }
 
     /**
@@ -405,14 +428,39 @@ public class OssTemplate {
     }
 
     /**
-     * 获取公共读meta
+     * 生成URL地址
+     * @param bucketName    桶名称
+     * @param objectName    Object完整路径，例如exampledir/exampleobject.txt。Object完整路径中不能包含Bucket名称。
+     * @return URL地址
+     */
+    public String generateUrl(@NonNull String bucketName, @NonNull String objectName) {
+        return generateUrl(bucketName, objectName, true);
+    }
+
+    /**
+     * 生成URL地址
+     * @param bucketName    桶名称
+     * @param objectName    Object完整路径，例如exampledir/exampleobject.txt。Object完整路径中不能包含Bucket名称。
+     * @param isCheck       是否检测存在
+     * @return URL地址
+     */
+    private String generateUrl(@NonNull String bucketName, @NonNull String objectName, boolean isCheck) {
+        if (isCheck && !isObjectExist(bucketName, objectName)) {
+            return null;
+        }
+        Date expiration = new Date(new Date().getTime() + this.expirationSecond * 1000);
+        return getOssClient().generatePresignedUrl(bucketName, objectName, expiration).toString();
+    }
+
+    /**
+     * 获取私有meta
      * @return ObjectMetadata
      */
-    public ObjectMetadata publicReadMetadata() {
+    public ObjectMetadata privateMetadata() {
         // 如果需要上传时设置存储类型和访问权限，请参考以下示例代码。
         ObjectMetadata metadata = new ObjectMetadata();
-        metadata.setHeader(OSSHeaders.OSS_STORAGE_CLASS, StorageClass.Standard.toString());
-        metadata.setObjectAcl(CannedAccessControlList.PublicRead);
+        metadata.setHeader(OSSHeaders.OSS_STORAGE_CLASS, StorageClass.Standard);
+        metadata.setObjectAcl(CannedAccessControlList.Private);
         return metadata;
     }
 
