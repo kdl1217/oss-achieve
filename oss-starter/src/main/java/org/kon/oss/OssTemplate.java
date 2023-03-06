@@ -12,6 +12,7 @@ import org.springframework.util.StringUtils;
 
 import java.io.*;
 import java.net.URL;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -34,9 +35,17 @@ public class OssTemplate {
      */
     private static final long DEFAULT_EXPIRATION_TIME = 3600;
     /**
+     * 默认私有
+     */
+    private static final boolean DEFAULT_PRIVATE = true;
+    /**
      * 过期时间（秒）
      */
     private long expirationSecond = DEFAULT_EXPIRATION_TIME;
+    /**
+     * 是否私有
+     */
+    private boolean isPrivate = DEFAULT_PRIVATE;
     /**
      * yourEndpoint填写Bucket所在地域对应的Endpoint。以华东1（杭州）为例，Endpoint填写为https://oss-cn-hangzhou.aliyuncs.com
      */
@@ -63,6 +72,11 @@ public class OssTemplate {
 
     public OssTemplate setExpirationSecond(long expirationSecond) {
         this.expirationSecond = expirationSecond;
+        return this;
+    }
+
+    public OssTemplate setPrivate(boolean aPrivate) {
+        isPrivate = aPrivate;
         return this;
     }
 
@@ -251,7 +265,7 @@ public class OssTemplate {
                 putObjectRequest.withProgressListener(new PushObjectProgressListener());
             }
             // 设置公共读
-            putObjectRequest.setMetadata(privateMetadata());
+            putObjectRequest.setMetadata(getMetadata());
             // 创建PutObject请求。
             getOssClient().putObject(putObjectRequest);
             // 生成URL地址
@@ -289,7 +303,7 @@ public class OssTemplate {
                 putObjectRequest.withProgressListener(new PushObjectProgressListener());
             }
             // 设置公共读
-            putObjectRequest.setMetadata(privateMetadata());
+            putObjectRequest.setMetadata(getMetadata());
             // 创建PutObject请求。
             getOssClient().putObject(putObjectRequest);
             // 生成URL地址
@@ -326,7 +340,44 @@ public class OssTemplate {
                 putObjectRequest.withProgressListener(new PushObjectProgressListener());
             }
             // 设置公共读
-            putObjectRequest.setMetadata(privateMetadata());
+            putObjectRequest.setMetadata(getMetadata());
+            // 创建PutObject请求。
+            getOssClient().putObject(putObjectRequest);
+            // 生成URL地址
+            return generateUrl(bucketName, objectName, false);
+        } catch (Exception e) {
+            log.error("push file error", e);
+        }
+        return null;
+    }
+
+    /**
+     * 上传文件
+     * @param bucketName    桶名称
+     * @param objectName    Object完整路径，例如exampledir/exampleobject.txt。Object完整路径中不能包含Bucket名称。
+     * @param file          文件
+     * @return URL地址
+     */
+    public String pushFile(@NonNull String bucketName, @NonNull String objectName, File file) {
+        return pushFile(bucketName, objectName, file, false);
+    }
+
+    /**
+     * 上传文件
+     * @param bucketName    桶名称
+     * @param objectName    Object完整路径，例如exampledir/exampleobject.txt。Object完整路径中不能包含Bucket名称。
+     * @param file          文件
+     * @param isListener    是否监听
+     * @return URL地址
+     */
+    public String pushFile(@NonNull String bucketName, @NonNull String objectName, @NonNull File file, boolean isListener) {
+        try {
+            PutObjectRequest putObjectRequest = new PutObjectRequest(bucketName, objectName, file);
+            if (isListener) {
+                putObjectRequest.withProgressListener(new PushObjectProgressListener());
+            }
+            // 设置公共读
+            putObjectRequest.setMetadata(getMetadata());
             // 创建PutObject请求。
             getOssClient().putObject(putObjectRequest);
             // 生成URL地址
@@ -448,20 +499,45 @@ public class OssTemplate {
         if (isCheck && !isObjectExist(bucketName, objectName)) {
             return null;
         }
-        Date expiration = new Date(new Date().getTime() + this.expirationSecond * 1000);
-        return getOssClient().generatePresignedUrl(bucketName, objectName, expiration).toString();
+        String url;
+        if (isPrivate) {
+            Date expiration = new Date(Instant.now().toEpochMilli() + this.expirationSecond * 1000);
+            url = getOssClient().generatePresignedUrl(bucketName, objectName, expiration).toString();
+        } else {
+            url = url(bucketName, objectName);
+        }
+        return url;
     }
 
     /**
      * 获取私有meta
      * @return ObjectMetadata
      */
-    public ObjectMetadata privateMetadata() {
+    public ObjectMetadata getMetadata() {
         // 如果需要上传时设置存储类型和访问权限，请参考以下示例代码。
         ObjectMetadata metadata = new ObjectMetadata();
         metadata.setHeader(OSSHeaders.OSS_STORAGE_CLASS, StorageClass.Standard);
-        metadata.setObjectAcl(CannedAccessControlList.Private);
+        // 默认为私有
+        CannedAccessControlList accessControlList = CannedAccessControlList.Private;
+        if (!isPrivate) {
+            accessControlList = CannedAccessControlList.PublicRead;
+        }
+        metadata.setObjectAcl(accessControlList);
         return metadata;
+    }
+
+    /**
+     * 根据规则生成
+     * @param bucketName    桶名称
+     * @param objectName    Object完整路径，例如exampledir/exampleobject.txt。Object完整路径中不能包含Bucket名称。
+     * @return  url地址
+     */
+    private String url(String bucketName, String objectName) {
+        String[] split = this.endpoint.split("//");
+        if (split.length < 2) {
+            throw new RuntimeException("Oss endpoint [" + this.endpoint + "] is error!!!");
+        }
+        return split[0] + "//" + bucketName + "." + split[1] + "/" + objectName;
     }
 
 

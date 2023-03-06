@@ -23,9 +23,13 @@ public class OssConfiguration {
     @Value("${oss.accessKeySecret}")
     String accessKeySecret;
 
+    @Value("${oss.isPrivate}")
+    boolean isPrivate;
+
     @Bean
     public OssTemplate getOssTemplate() {
         return new OssTemplate(this.endpoint, this.accessKeyId, this.accessKeySecret)
+                .setPrivate(isPrivate)
                 .build();
     }
 }
