@@ -19,8 +19,8 @@
 # Oss settings
 oss:
   endpoint: https://oss-cn-hangzhou.aliyuncs.com
-  accessKeyId: WJ0125KNWTSW
-  accessKeySecret: 92eb026ba2c3215f36e902
+  accessKeyId: accessKeyId
+  accessKeySecret: accessKeySecret
 ````
 - 在SpringBoot启动类上添加注解
 ```java
